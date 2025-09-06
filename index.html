@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pronóstico Interactivo Bolsa Francés Andalucía 2025-26</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .chart-container { position: relative; width: 100%; height: 300px; }
+        @media (min-width: 768px) { .chart-container { height: 350px; } }
+        .result-card { background: linear-gradient(135deg, #7C3AED, #4C1D95); }
+        .badge { display: inline-flex; align-items: center; gap:.4rem; padding:.15rem .5rem; border-radius:.5rem; font-weight:600; font-size:.8rem; }
+    </style>
+</head>
+<body class="bg-[#F5F3FF] text-[#3B0764]">
+
+    <main class="container mx-auto p-4 md:p-8 max-w-6xl">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-[#3B0764] mb-2">Pronóstico Personalizado para Aspirantes</h1>
+            <p class="text-md text-[#6D28D9]">Bolsa de Francés - Andalucía 2025/26</p>
+            <p class="text-sm text-gray-700 mt-3">Una herramienta elaborada por <a href="https://foro.escuelaenred.com" target="_blank" class="font-semibold text-[#8B5CF6] hover:underline">👨‍🏫 foro.escuelaenred.com</a></p>
+        </header>
+
+        <div class="bg-white rounded-2xl shadow-md p-6 mb-8">
+            <h2 class="text-xl font-bold text-[#3B0764] mb-4">Introduce tus datos para la simulación</h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label for="bolsaPos" class="block text-sm font-medium text-gray-700">Tu posición en bolsa</label>
+                    <input type="number" id="bolsaPos" value="1200" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-violet-900 focus:ring-violet-900 sm:text-sm p-2" />
+                </div>
+
+                <div>
+                    <div class="flex items-center justify-between">
+                        <label for="vacantesAgosto" class="block text-sm font-medium text-gray-700">Vacantes informatizadas (Agosto)</label>
+                        <span class="badge bg-[#F5F3FF] text-[#3B0764] border border-[#C4B5FD]" title="Dato confirmado y bloqueado">🔒 Confirmado</span>
+                    </div>
+                    <input type="number" id="vacantesAgosto" value="453" disabled aria-readonly="true" title="Dato confirmado por la organización. No editable." class="mt-1 block w-full rounded-md border-gray-200 bg-gray-100 text-gray-700 cursor-not-allowed sm:text-sm p-2" />
+                    <p class="text-xs text-gray-500 mt-1">Este valor es oficial (ya sucedido) y no puede modificarse.</p>
+                </div>
+            </div>
+
+            <div class="mt-6 text-center">
+                <button id="calculateBtn" class="bg-[#6D28D9] hover:bg-[#4C1D95] text-white font-bold py-2 px-6 rounded-lg transition-colors">Calcular Pronóstico</button>
+            </div>
+        </div>
+
+        <div id="resultsBlock" class="hidden">
+            <div id="resultText" class="text-center mb-8 p-6 rounded-2xl shadow-lg text-white result-card"></div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div class="bg-white rounded-2xl shadow-md p-6">
+                    <h3 class="text-lg font-bold text-[#3B0764] mb-2 text-center">Avance Acumulado vs. Tu Posición</h3>
+                    <div class="chart-container">
+                        <canvas id="cumulativeChart"></canvas>
+                    </div>
+                </div>
+                <div class="bg-white rounded-2xl shadow-md p-6">
+                    <h3 id="barChartTitle" class="text-lg font-bold text-[#3B0764] mb-2 text-center">Vacantes y Llamamientos por Mes</h3>
+                    <div class="chart-container">
+                        <canvas id="monthlyCallsChart"></canvas>
+                    </div>
+                    <p id="rangeNote" class="text-[11px] text-gray-500 mt-3 text-center"></p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // === RANGOS FRANCÉS (según tu tabla) ===
+            const RANGOS = {
+                'Sept': { min:280, max:300, obs:'Ajuste de plantillas, coberturas iniciales y apoyos en centros bilingües.', nivel:'Muy Alta' },
+                'Oct':  { min:75,  max:90,  obs:'Cobertura de bajas medias/largas.', nivel:'Alta' },
+                'Nov':  { min:40,  max:50,  obs:'Sustituciones por enfermedad, permisos y maternidades.', nivel:'Media' },
+                'Dic':  { min:0,   max:2,   obs:'Festivos y Navidad frenan adjudicaciones.', nivel:'Muy Baja' },
+                'Ene':  { min:35,  max:45,  obs:'Repunte por gripe y bajas prolongadas post-Navidad.', nivel:'Alta' },
+                'Feb':  { min:7,   max:10,  obs:'Menor actividad por Semana Blanca (23–27 feb) y 28F.', nivel:'Media-Baja' },
+                'Mar':  { min:12,  max:16,  obs:'Incremento previo a Semana Santa.', nivel:'Media' },
+                'Abr':  { min:8,   max:12,  obs:'Semana Santa (29 marzo–5 abril) acorta el mes.', nivel:'Muy Baja' },
+                'May':  { min:6,   max:9,   obs:'Coberturas puntuales por evaluaciones y bajas de fin de curso.', nivel:'Baja' },
+                'Jun':  { min:1,   max:2,   obs:'Final de curso: adjudicaciones testimoniales.', nivel:'Muy Baja' }
+            };
+
+            // Rango total que quieres mostrar (override de la suma directa)
+            const TOTAL_OVERRIDE = { min: 917, max: 1036 };
+
+            const LLAMAMIENTOS_MENSUALES = Object.fromEntries(
+                Object.entries(RANGOS).map(([mes, r]) => [mes, Math.round((r.min + r.max) / 2)])
+            );
+            const MESES = Object.keys(LLAMAMIENTOS_MENSUALES);
+            const VACANTES_AGOSTO = 453; // 🔒 Dato confirmado
+
+            // Calendario SIPRI de referencia (para ubicar semana/día estimado)
+            const CALENDARIO_SIPRI = [
+                { mes: 'Sept', dia: 'Jueves 4', incorporacion: 'Miércoles 10 Sep' }, { mes: 'Sept', dia: 'Martes 9', incorporacion: 'Lunes 15 Sep' }, { mes: 'Sept', dia: 'Jueves 11', incorporacion: 'Miércoles 17 Sep' }, { mes: 'Sept', dia: 'Martes 16', incorporacion: 'Lunes 22 Sep' }, { mes: 'Sept', dia: 'Jueves 18', incorporacion: 'Miércoles 24 Sep' }, { mes: 'Sept', dia: 'Martes 23', incorporacion: 'Lunes 29 Sep' }, { mes: 'Sept', dia: 'Jueves 25', incorporacion: 'Miércoles 1 Oct' }, { mes: 'Sept', dia: 'Martes 30', incorporacion: 'Lunes 6 Oct' },
+                { mes: 'Oct', dia: 'Jueves 2', incorporacion: 'Miércoles 8 Oct' }, { mes: 'Oct', dia: 'Martes 7', incorporacion: 'Martes 14 Oct' }, { mes: 'Oct', dia: 'Jueves 9', incorporacion: 'Miércoles 15 Oct' }, { mes: 'Oct', dia: 'Martes 14', incorporacion: 'Lunes 20 Oct' }, { mes: 'Oct', dia: 'Jueves 16', incorporacion: 'Miércoles 22 Oct' }, { mes: 'Oct', dia: 'Martes 21', incorporacion: 'Lunes 27 Oct' }, { mes: 'Oct', dia: 'Jueves 23', incorporacion: 'Miércoles 29 Oct' }, { mes: 'Oct', dia: 'Martes 28', incorporacion: 'Lunes 3 Nov' }, { mes: 'Oct', dia: 'Jueves 30', incorporacion: 'Miércoles 5 Nov' },
+                { mes: 'Nov', dia: 'Martes 4', incorporacion: 'Lunes 10 Nov' }, { mes: 'Nov', dia: 'Jueves 6', incorporacion: 'Miércoles 12 Nov' }, { mes: 'Nov', dia: 'Martes 11', incorporacion: 'Lunes 16 Nov' }, { mes: 'Nov', dia: 'Jueves 13', incorporacion: 'Miércoles 19 Nov' }, { mes: 'Nov', dia: 'Martes 18', incorporacion: 'Lunes 24 Nov' }, { mes: 'Nov', dia: 'Jueves 20', incorporacion: 'Miércoles 26 Nov' }, { mes: 'Nov', dia: 'Martes 25', incorporacion: 'Lunes 1 Dic' }, { mes: 'Nov', dia: 'Jueves 27', incorporacion: 'Miércoles 3 Dic' },
+                { mes: 'Dic', dia: 'Martes 2', incorporacion: 'Martes 9 Dic' }, { mes: 'Dic', dia: 'Jueves 4', incorporacion: 'Miércoles 10 Dic' }, { mes: 'Dic', dia: 'Martes 9', incorporacion: 'Lunes 15 Dic' }, { mes: 'Dic', dia: 'Jueves 11', incorporacion: 'Miércoles 17 Dic' },
+                { mes: 'Ene', dia: 'Jueves 8', incorporacion: 'Miércoles 14 Ene' }, { mes: 'Ene', dia: 'Martes 13', incorporacion: 'Lunes 19 Ene' }, { mes: 'Ene', dia: 'Jueves 15', incorporacion: 'Miércoles 21 Ene' }, { mes: 'Ene', dia: 'Martes 20', incorporacion: 'Lunes 26 Ene' }, { mes: 'Ene', dia: 'Jueves 22', incorporacion: 'Miércoles 28 Ene' }, { mes: 'Ene', dia: 'Martes 27', incorporacion: 'Lunes 2 Feb' }, { mes: 'Ene', dia: 'Jueves 29', incorporacion: 'Miércoles 4 Feb' },
+                { mes: 'Feb', dia: 'Martes 3', incorporacion: 'Lunes 9 Feb' }, { mes: 'Feb', dia: 'Jueves 5', incorporacion: 'Miércoles 11 Feb' }, { mes: 'Feb', dia: 'Martes 10', incorporacion: 'Lunes 16 Feb' }, { mes: 'Feb', dia: 'Jueves 12', incorporacion: 'Miércoles 18 Feb' }, { mes: 'Feb', dia: 'Martes 17', incorporacion: 'Lunes 23 Feb' }, { mes: 'Feb', dia: 'Jueves 19', incorporacion: 'Miércoles 25 Feb' }, { mes: 'Feb', dia: 'Martes 24', incorporacion: 'Lunes 2 Mar' }, { mes: 'Feb', dia: 'Jueves 26', incorporacion: 'Miércoles 4 Mar' },
+                { mes: 'Mar', dia: 'Martes 3', incorporacion: 'Lunes 9 Mar' }, { mes: 'Mar', dia: 'Jueves 5', incorporacion: 'Miércoles 11 Mar' }, { mes: 'Mar', dia: 'Martes 10', incorporacion: 'Lunes 16 Mar' }, { mes: 'Mar', dia: 'Jueves 12', incorporacion: 'Miércoles 18 Mar' }, { mes: 'Mar', dia: 'Martes 17', incorporacion: 'Lunes 23 Mar' }, { mes: 'Mar', dia: 'Jueves 19', incorporacion: 'Miércoles 25 Mar' }, { mes: 'Mar', dia: 'Martes 24', incorporacion: 'Lunes 6 Abr' },
+                { mes: 'Abr', dia: 'Martes 7', incorporacion: 'Lunes 13 Abr' }, { mes: 'Abr', dia: 'Jueves 9', incorporacion: 'Miércoles 15 Abr' }, { mes: 'Abr', dia: 'Martes 14', incorporacion: 'Lunes 20 Abr' }, { mes: 'Abr', dia: 'Jueves 16', incorporacion: 'Miércoles 22 Abr' }, { mes: 'Abr', dia: 'Martes 21', incorporacion: 'Lunes 27 Abr' }, { mes: 'Abr', dia: 'Jueves 23', incorporacion: 'Miércoles 29 Abr' }, { mes: 'Abr', dia: 'Martes 28', incorporacion: 'Lunes 4 May' }, { mes: 'Abr', dia: 'Jueves 30', incorporacion: 'Miércoles 6 May' },
+                { mes: 'May', dia: 'Martes 5', incorporacion: 'Lunes 11 May' }, { mes: 'May', dia: 'Jueves 7', incorporacion: 'Miércoles 13 May' }, { mes: 'May', dia: 'Martes 12', incorporacion: 'Lunes 18 May' }, { mes: 'May', dia: 'Jueves 14', incorporacion: 'Miércoles 20 May' }, { mes: 'May', dia: 'Martes 19', incorporacion: 'Lunes 25 May' }, { mes: 'May', dia: 'Jueves 21', incorporacion: 'Miércoles 27 May' }, { mes: 'May', dia: 'Martes 26', incorporacion: 'Lunes 1 Jun' }, { mes: 'May', dia: 'Jueves 28', incorporacion: 'Miércoles 3 Jun' },
+                { mes: 'Jun', dia: 'Martes 2', incorporacion: 'Lunes 8 Jun' }, { mes: 'Jun', dia: 'Jueves 4', incorporacion: 'Miércoles 10 Jun' }
+            ];
+
+            // === PLUGINS ===
+            const monthShadingPlugin = {
+                id: 'monthShadingPlugin',
+                beforeDraw: (chart) => {
+                    const ctx = chart.ctx;
+                    const xAxis = chart.scales.x;
+                    const chartArea = chart.chartArea;
+                    const evenColor = 'rgba(237, 233, 254, 0.6)';
+                    const oddColor = 'transparent';
+                    for (let i = 0; i < MESES.length; i++) {
+                        const xStart = xAxis.getPixelForTick(i);
+                        const xEnd = xAxis.getPixelForTick(i + 1);
+                        const width = xEnd - xStart;
+                        ctx.fillStyle = i % 2 === 0 ? evenColor : oddColor;
+                        ctx.fillRect(xStart, chartArea.top, width, chartArea.height);
+                    }
+                }
+            };
+
+            const verticalLinePlugin = {
+                id: 'verticalLinePlugin',
+                afterDatasetsDraw: (chart) => {
+                    const intersection = chart.options.plugins.verticalLinePlugin.intersection;
+                    if (!intersection || typeof intersection.x !== 'number') return;
+                    const ctx = chart.ctx; const xAxis = chart.scales.x; const yAxis = chart.scales.y;
+                    const xCoord = xAxis.getPixelForValue(intersection.x);
+                    const yTop = yAxis.getPixelForValue(intersection.yValue);
+                    const yBottom = yAxis.bottom;
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.moveTo(xCoord, yTop); ctx.lineTo(xCoord, yBottom);
+                    ctx.lineWidth = 2; ctx.strokeStyle = '#4C1D95'; ctx.setLineDash([6,6]); ctx.stroke();
+                    ctx.fillStyle = '#4C1D95'; ctx.font = 'bold 12px Inter'; ctx.textAlign = 'center';
+                    ctx.fillText(intersection.label, xCoord, yTop - 10);
+                    ctx.restore();
+                }
+            };
+
+            let cumulativeChart, monthlyCallsChart;
+
+            function createCharts() {
+                const cumulativeCtx = document.getElementById('cumulativeChart').getContext('2d');
+                cumulativeChart = new Chart(cumulativeCtx, {
+                    type: 'line', data: { datasets: [] }, options: getChartOptions('Posiciones avanzadas', true),
+                    plugins: [monthShadingPlugin, verticalLinePlugin]
+                });
+
+                const monthlyCtx = document.getElementById('monthlyCallsChart').getContext('2d');
+                monthlyCallsChart = new Chart(monthlyCtx, {
+                    type: 'bar', data: { labels: [], datasets: [] }, options: getChartOptions('Nº de llamamientos', false)
+                });
+            }
+
+            function getChartOptions(yAxisTitle, isCumulative) {
+                return {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { display: true, position: 'bottom' },
+                        verticalLinePlugin: { intersection: null },
+                        tooltip: {
+                            backgroundColor: 'rgba(0,0,0,0.85)',
+                            titleFont: { weight: 'bold' },
+                            bodyFont: { family: 'Inter' },
+                            padding: 10,
+                            callbacks: !isCumulative ? {
+                                label: (ctx) => ` ${ctx.dataset.label}: ${ctx.parsed.y}`,
+                                afterLabel: (ctx) => {
+                                    const label = ctx.label;
+                                    if (label === 'Vacantes') return 'Dato confirmado (bloqueado)';
+                                    const info = RANGOS[label];
+                                    return info ? `Rango: ${info.min}–${info.max}\nNivel: ${info.nivel}\nNota: ${info.obs}` : '';
+                                }
+                            } : {}
+                        }
+                    },
+                    scales: {
+                        x: isCumulative ? {
+                            type: 'linear', min: 0, max: MESES.length,
+                            grid: { drawOnChartArea: false },
+                            ticks: {
+                                callback: function(value){ const labels = ['Vacantes', ...MESES]; return labels[value] ?? null; }, stepSize: 1
+                            }
+                        } : { type:'category', grid:{ display:false } },
+                        y: { beginAtZero: true, title: { display: true, text: yAxisTitle, color:'#3B0764' } }
+                    }
+                };
+            }
+
+            function getOrdinal(n){ const ord = ['', 'Primera', 'Segunda', 'Tercera', 'Cuarta']; return ord[n] || `${n}ª`; }
+
+            function calculateForecast(posicion, vacantes){
+                if (posicion <= vacantes) return { tipo: 'verano' };
+                let acumulado = vacantes;
+                for (let i = 0; i < MESES.length; i++){
+                    const mes = MESES[i];
+                    const llamamientosMes = LLAMAMIENTOS_MENSUALES[mes];
+                    if (llamamientosMes > 0 && acumulado + llamamientosMes >= posicion){
+                        const restante = posicion - acumulado;
+                        const frac = restante / llamamientosMes; // 0..1
+                        const xIndex = i + frac; // eje lineal
+                        const semana = Math.max(1, Math.ceil(frac * 4));
+                        const semanaOrdinal = getOrdinal(semana);
+                        const llamadasMes = CALENDARIO_SIPRI.filter(c => c.mes === mes);
+                        const llamadaSeleccionada = llamadasMes.length > 0 ? llamadasMes[Math.min(Math.floor(frac * llamadasMes.length), llamadasMes.length - 1)] : null;
+                        return { tipo: 'especifico', semana: `${semanaOrdinal} Sem. de ${mes}`, call: llamadaSeleccionada, mes, mesIndex: i, xIndex, rango: RANGOS[mes] };
+                    }
+                    acumulado += llamamientosMes;
+                }
+                return { tipo: 'siguiente_curso' };
+            }
+
+            function updateUI(resultado, posicion, vacantes){
+                document.getElementById('resultsBlock').classList.remove('hidden');
+                const resultTextEl = document.getElementById('resultText');
+                switch (resultado.tipo){
+                    case 'verano':
+                        resultTextEl.innerHTML = `<p class="text-3xl font-bold">¡Adjudicación en Verano!</p><p class="text-lg mt-2 opacity-90">Con tu posición (${posicion}), es muy probable que entres en una de las <strong>${vacantes}</strong> vacantes de agosto <span class="inline-flex items-center gap-1 bg-white/20 rounded-md px-2 py-0.5">🔒 confirmadas</span>.</p>`;
+                        break;
+                    case 'siguiente_curso':
+                        resultTextEl.innerHTML = `<p class="text-3xl font-bold">No se estima llamada este curso.</p><p class="text-lg mt-2 opacity-90">Tu posición (${posicion}) supera los llamamientos totales previstos.</p>`;
+                        break;
+                    case 'especifico':
+                        const call = resultado.call;
+                        const rangoTxt = resultado.rango ? `Rango mensual: ${resultado.rango.min}–${resultado.rango.max}` : '';
+                        resultTextEl.innerHTML = `
+                            <p class="text-3xl font-bold">Estimación: ${resultado.semana}</p>
+                            ${call ? `<div class="mt-2 text-xl"><p>Llamamiento SIPRI: <strong>${call.dia}</strong></p><p>Incorporación prevista: <strong>${call.incorporacion}</strong></p></div>` : ''}
+                            <p class="text-sm mt-3 opacity-90">${rangoTxt}</p>
+                        `;
+                        break;
+                }
+
+                if (!cumulativeChart) createCharts();
+
+                // Datos acumulados
+                let acumulado = vacantes;
+                const avanceAcumulado = [{ x: 0, y: vacantes }];
+                MESES.forEach((mes, i) => { acumulado += LLAMAMIENTOS_MENSUALES[mes]; avanceAcumulado.push({ x: i + 1, y: acumulado }); });
+
+                const posicionUsuario = avanceAcumulado.map(p => ({ x: p.x, y: posicion > 0 ? posicion : null }));
+
+                if (resultado.tipo === 'especifico' && resultado.xIndex != null){
+                    cumulativeChart.options.plugins.verticalLinePlugin.intersection = { x: resultado.xIndex, yValue: posicion, label: resultado.semana };
+                } else {
+                    cumulativeChart.options.plugins.verticalLinePlugin.intersection = null;
+                }
+
+                cumulativeChart.data.datasets = [
+                    {
+                        label: 'Avance Acumulado de la Bolsa', data: avanceAcumulado,
+                        borderColor: '#7C3AED', backgroundColor: 'rgba(124, 58, 237, 0.2)', fill: true,
+                        tension: 0, pointRadius: 2, pointHoverRadius: 6, borderWidth: 2.5
+                    },
+                    {
+                        label: 'Tu Posición en Bolsa', data: posicionUsuario,
+                        borderColor: '#4C1D95', borderDash: [5,5], backgroundColor: 'transparent',
+                        pointRadius: 0, tension: 0, borderWidth: 2
+                    }
+                ];
+                cumulativeChart.update();
+
+                // Barras
+                const barLabels = ['Vacantes', ...MESES];
+                const barData = [vacantes, ...Object.values(LLAMAMIENTOS_MENSUALES)];
+
+                const NIVEL_COLOR = {
+                    'Muy Alta': '#4C1D95',
+                    'Alta': '#6D28D9',
+                    'Media': '#7C3AED',
+                    'Media-Baja': '#8B5CF6',
+                    'Baja': '#A78BFA',
+                    'Muy Baja': '#DDD6FE'
+                };
+
+                const colores = barLabels.map((label, idx) => {
+                    if (idx === 0) return '#3B0764'; // agosto confirmado
+                    const info = RANGOS[label];
+                    return info ? (NIVEL_COLOR[info.nivel] || '#6D28D9') : '#6D28D9';
+                });
+
+                const total = barData.reduce((a,b) => a + b, 0);
+                const totalMinCalc = Object.values(RANGOS).reduce((s, r) => s + r.min, 0) + vacantes;
+                const totalMaxCalc = Object.values(RANGOS).reduce((s, r) => s + r.max, 0) + vacantes;
+
+                document.getElementById('barChartTitle').textContent = `Vacantes y Llamamientos por Mes (Total medio: ${total})`;
+                const rangeNote = document.getElementById('rangeNote');
+                if (rangeNote) rangeNote.textContent =
+                  `Rango total estimado: ≈ ${TOTAL_OVERRIDE.min}–${TOTAL_OVERRIDE.max} (incluye ${vacantes} vacantes de agosto 🔒). ` +
+                  `Suma directa de rangos: ${totalMinCalc}–${totalMaxCalc}.`;
+
+                if (!monthlyCallsChart){ createCharts(); }
+                monthlyCallsChart.data.labels = barLabels;
+                monthlyCallsChart.data.datasets = [{ label: 'Llamamientos y Vacantes', data: barData, backgroundColor: colores, borderRadius: 4 }];
+                monthlyCallsChart.update();
+            }
+
+            // Interacción
+            document.getElementById('calculateBtn').addEventListener('click', () => {
+                const posicion = parseInt(document.getElementById('bolsaPos').value) || 0;
+                const vacantes = VACANTES_AGOSTO; // bloqueado
+                const resultado = calculateForecast(posicion, vacantes);
+                updateUI(resultado, posicion, vacantes);
+            });
+
+            // Inicialización
+            createCharts();
+            document.getElementById('calculateBtn').click();
+        });
+    </script>
+</body>
+</html>

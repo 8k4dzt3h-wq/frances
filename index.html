@@ -72,7 +72,7 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            // === RANGOS FRANCÉS (según tu tabla) ===
+            // === RANGOS FRANCÉS (según previsiones confirmadas) ===
             const RANGOS = {
                 'Sept': { min:280, max:300, obs:'Ajuste de plantillas, coberturas iniciales y apoyos en centros bilingües.', nivel:'Muy Alta' },
                 'Oct':  { min:75,  max:90,  obs:'Cobertura de bajas medias/largas.', nivel:'Alta' },
@@ -86,16 +86,14 @@
                 'Jun':  { min:1,   max:2,   obs:'Final de curso: adjudicaciones testimoniales.', nivel:'Muy Baja' }
             };
 
-            // Rango total que quieres mostrar (override de la suma directa)
-            const TOTAL_OVERRIDE = { min: 917, max: 1036 };
-
+            // Medias de cada rango (para las barras y acumulados)
             const LLAMAMIENTOS_MENSUALES = Object.fromEntries(
                 Object.entries(RANGOS).map(([mes, r]) => [mes, Math.round((r.min + r.max) / 2)])
             );
             const MESES = Object.keys(LLAMAMIENTOS_MENSUALES);
-            const VACANTES_AGOSTO = 453; // 🔒 Dato confirmado
+            const VACANTES_AGOSTO = 453; // 🔒 Dato confirmado y bloqueado
 
-            // Calendario SIPRI de referencia (para ubicar semana/día estimado)
+            // Calendario SIPRI (referencia visual; incluye incorporación estimada pre-calculada)
             const CALENDARIO_SIPRI = [
                 { mes: 'Sept', dia: 'Jueves 4', incorporacion: 'Miércoles 10 Sep' }, { mes: 'Sept', dia: 'Martes 9', incorporacion: 'Lunes 15 Sep' }, { mes: 'Sept', dia: 'Jueves 11', incorporacion: 'Miércoles 17 Sep' }, { mes: 'Sept', dia: 'Martes 16', incorporacion: 'Lunes 22 Sep' }, { mes: 'Sept', dia: 'Jueves 18', incorporacion: 'Miércoles 24 Sep' }, { mes: 'Sept', dia: 'Martes 23', incorporacion: 'Lunes 29 Sep' }, { mes: 'Sept', dia: 'Jueves 25', incorporacion: 'Miércoles 1 Oct' }, { mes: 'Sept', dia: 'Martes 30', incorporacion: 'Lunes 6 Oct' },
                 { mes: 'Oct', dia: 'Jueves 2', incorporacion: 'Miércoles 8 Oct' }, { mes: 'Oct', dia: 'Martes 7', incorporacion: 'Martes 14 Oct' }, { mes: 'Oct', dia: 'Jueves 9', incorporacion: 'Miércoles 15 Oct' }, { mes: 'Oct', dia: 'Martes 14', incorporacion: 'Lunes 20 Oct' }, { mes: 'Oct', dia: 'Jueves 16', incorporacion: 'Miércoles 22 Oct' }, { mes: 'Oct', dia: 'Martes 21', incorporacion: 'Lunes 27 Oct' }, { mes: 'Oct', dia: 'Jueves 23', incorporacion: 'Miércoles 29 Oct' }, { mes: 'Oct', dia: 'Martes 28', incorporacion: 'Lunes 3 Nov' }, { mes: 'Oct', dia: 'Jueves 30', incorporacion: 'Miércoles 5 Nov' },
@@ -286,20 +284,18 @@
                 };
 
                 const colores = barLabels.map((label, idx) => {
-                    if (idx === 0) return '#3B0764'; // agosto confirmado
+                    if (idx === 0) return '#3B0764';
                     const info = RANGOS[label];
                     return info ? (NIVEL_COLOR[info.nivel] || '#6D28D9') : '#6D28D9';
                 });
 
                 const total = barData.reduce((a,b) => a + b, 0);
-                const totalMinCalc = Object.values(RANGOS).reduce((s, r) => s + r.min, 0) + vacantes;
-                const totalMaxCalc = Object.values(RANGOS).reduce((s, r) => s + r.max, 0) + vacantes;
+                const totalMin = Object.values(RANGOS).reduce((s, r) => s + r.min, 0) + vacantes;
+                const totalMax = Object.values(RANGOS).reduce((s, r) => s + r.max, 0) + vacantes;
 
                 document.getElementById('barChartTitle').textContent = `Vacantes y Llamamientos por Mes (Total medio: ${total})`;
                 const rangeNote = document.getElementById('rangeNote');
-                if (rangeNote) rangeNote.textContent =
-                  `Rango total estimado: ≈ ${TOTAL_OVERRIDE.min}–${TOTAL_OVERRIDE.max} (incluye ${vacantes} vacantes de agosto 🔒). ` +
-                  `Suma directa de rangos: ${totalMinCalc}–${totalMaxCalc}.`;
+                if (rangeNote) rangeNote.textContent = `Rango total estimado: ${totalMin}–${totalMax} (incluye ${vacantes} vacantes de agosto 🔒)`;
 
                 if (!monthlyCallsChart){ createCharts(); }
                 monthlyCallsChart.data.labels = barLabels;
